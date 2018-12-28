@@ -1,4 +1,3 @@
-# Hobo-cal
 Sensors calibration
 
 input_files.zip contents:
