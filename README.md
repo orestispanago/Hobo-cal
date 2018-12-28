@@ -1,5 +1,5 @@
 Contains timestamped temperature and relative humidity data from sensors and weather station and 
-python script to visualize data.
+a python script to visualize data.
 
 input_files.zip contents:
 
