@@ -61,7 +61,7 @@ def plot_residuals():
     res.plot(title='Residuals (Hobo - LapUp)', figsize=(16, 9), subplots=True, sharey=True, layout=(3, 3))
 
 
-def corrfunc(x, y, **kws):
+def corrfunc(x, y):
     """ Calculates Pearson's R and annotates axis
     see https://stackoverflow.com/questions/30942577/seaborn-correlation-coefficient-on-pairgrid
     Use on seaborn scatter matrix"""
@@ -72,7 +72,7 @@ def corrfunc(x, y, **kws):
                 xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
 
 
-def slope_intercept(x, y, **kws):
+def slope_intercept(x, y):
     """ Calculates slope + intercept and annotates axis
     Use on seaborn scatter matrix"""
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
