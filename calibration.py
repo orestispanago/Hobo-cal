@@ -1,9 +1,9 @@
-"""
+'''
 Reads raw data from LAPUP and HOBOs
 creates 10min timeseries with NaNs
 concatenates to large dataframe
 plots T or rh scatter
-"""
+'''
 
 import glob
 import pandas as pd
@@ -19,7 +19,7 @@ hobonames = [i[:3] for i in csvfiles]
 
 def make_ts(df, first=None, last=None, step='10min'):
     """Creates timeseries"""
-    if first is None and last is None:
+    if first == None and last == None:
         first = df.iloc[0].name
         last = df.iloc[-1].name
     df = df[~df.index.duplicated(keep='first')]  # dumps index duplicate values
@@ -45,25 +45,12 @@ def df_list():
     longest = lens.index(max(lens))  # Find largest hobo dataframe
     start = dflist[longest].iloc[0].name
     end = dflist[longest].iloc[-1].name
-    df1 = pd.read_csv("Meteo_1min_2018_raw1.dat", names=['Time', 'T', 'rh'],
+    df1 = pd.read_csv("Meteo_1min_2018_raw1.dat", names=['Time', 'T', 'RH'],
                       usecols=(0, 4, 5), index_col=0,
                       parse_dates=True, dayfirst=False)
     lapup = make_ts(df1, first=start, last=end)
     dflist = [lapup] + dflist
     return dflist
-
-
-def split_large():
-    """ Creates two separate dataframes for T and RH from large"""
-    tcols = [i for i in list(large) if 'T' in i]
-    temp_df = pd.DataFrame(large[tcols])
-    temp_df.rename(columns={'T': 'LapUp'}, inplace=True)
-    temp_df.columns = temp_df.columns.str.replace('T', '')
-    rhcols = [i for i in list(large) if 'rh' in i]
-    rh_df = pd.DataFrame(large[rhcols])
-    rh_df.rename(columns={'rh': 'LapUp'}, inplace=True)
-    rh_df.columns = rh_df.columns.str.replace('rh', '')
-    return temp_df, rh_df
 
 
 def plot_residuals():
@@ -74,7 +61,7 @@ def plot_residuals():
     res.plot(title='Residuals (Hobo - LapUp)', figsize=(16, 9), subplots=True, sharey=True, layout=(3, 3))
 
 
-def corrfunc(x, y):
+def corrfunc(x, y, **kws):
     """ Calculates Pearson's R and annotates axis
     see https://stackoverflow.com/questions/30942577/seaborn-correlation-coefficient-on-pairgrid
     Use on seaborn scatter matrix"""
@@ -85,7 +72,7 @@ def corrfunc(x, y):
                 xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
 
 
-def slope_intercept(x, y):
+def slope_intercept(x, y, **kws):
     """ Calculates slope + intercept and annotates axis
     Use on seaborn scatter matrix"""
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
@@ -118,15 +105,22 @@ def ref_scatters(df, ref=None):
     plt.show()
 
 
+# plot_scatter(large, 'T', ax_max=35)
+# plot_scatter(large,'rh',100) # H52 RH not good
+
 df_list = df_list()
 large = pd.concat(df_list, axis=1)  # concatenates dflist to large dataframe
-temps, rh = split_large()
+large.rename(columns={'T': 'LapT'}, inplace=True)
+large.rename(columns={'RH': 'LapRH'}, inplace=True)
 
-temps = temps.dropna()
+large.columns = pd.MultiIndex.from_tuples([(c[:3], c[3:]) for c in large.columns])
+temps = large.xs('T', axis=1, level=1, drop_level=True)
+rh = large.xs('RH', axis=1, level=1, drop_level=True)
+
+# g = scatter_matrix(temps, alpha = 0.2, figsize = (16,9), diagonal = 'hist')
 
 # temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 # rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 
-
-# plot_residuals()
+temps = temps.dropna()
 ref_scatters(temps, ref='H53')
