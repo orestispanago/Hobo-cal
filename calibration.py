@@ -28,7 +28,7 @@ def make_ts(df, first=None, last=None, step='10min'):
     return df
 
 
-def df_list():
+def df_list(read_lapup=True):
     """ Reads hobo files,
     creates timeseries based on largest hobo df,
     appends dataframes to list"""
@@ -45,12 +45,13 @@ def df_list():
     longest = lens.index(max(lens))  # Find largest hobo dataframe
     start = dflist[longest].iloc[0].name
     end = dflist[longest].iloc[-1].name
-    df1 = pd.read_csv("Meteo_1min_2018_raw1.dat",
-                      names=['Time', 'LapT', 'LapRH'],
-                      usecols=(0, 4, 5), index_col=0,
-                      parse_dates=True, dayfirst=False)
-    lapup = make_ts(df1, first=start, last=end)
-    dflist = [lapup] + dflist
+    if read_lapup is True:
+        df1 = pd.read_csv("Meteo_1min_2018_raw1.dat",
+                          names=['Time', 'LapT', 'LapRH'],
+                          usecols=(0, 4, 5), index_col=0,
+                          parse_dates=True, dayfirst=False)
+        lapup = make_ts(df1, first=start, last=end)
+        dflist = [lapup] + dflist
     return dflist
 
 
@@ -63,7 +64,7 @@ def plot_residuals():
              subplots=True, sharey=True, layout=(3, 3))
 
 
-def corrfunc(x, y):
+def corrfunc(x, y, **kwargs):
     """ Calculates Pearson's R and annotates axis
     see https://stackoverflow.com/questions/30942577/seaborn-correlation-coefficient-on-pairgrid
     Use on seaborn scatter matrix"""
@@ -74,7 +75,7 @@ def corrfunc(x, y):
                 xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
 
 
-def slope_intercept(x, y):
+def slope_intercept(x, y, **kwargs):
     """ Calculates slope + intercept and annotates axis
     Use on seaborn scatter matrix"""
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
@@ -84,6 +85,7 @@ def slope_intercept(x, y):
 
 
 def scatter_matrix_lower():
+    """ Plots lower triangle of scatter matrix """
     grid = sns.PairGrid(data=temps, vars=list(temps), size=1)
     for i, j in zip(*np.triu_indices_from(grid.axes, k=0)):
         grid.axes[i, j].set_visible(False)
@@ -91,39 +93,40 @@ def scatter_matrix_lower():
     grid.map_lower(corrfunc)
     grid.set(alpha=1)
     grid.fig.suptitle('Air Temperature (°C)')
-    plt.rcParams["axes.labelsize"] = 11
+    # plt.rcParams["axes.labelsize"] = 11
 
 
 def ref_scatters(df, ref=None):
     cols = list(df)
     cols.remove(ref)
-    fig, axes = plt.subplots(nrows=3, ncols=3, sharex=True, figsize=(16, 9))
+    fig, axes = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(16, 9))
     for i, col in enumerate(cols):
         xval = df[col].values
         yval = df[ref].values
         slope, intercept, r_value, p_value, std_err = stats.linregress(xval,
                                                                        yval)
-        g = sns.regplot(x=df[col], y=ref, data=df, ax=axes[i // 3][i % 3],
+        g = sns.regplot(x=df[col], y=ref, data=df, ax=axes[i // 4][i % 4],
                         scatter_kws={'s': 1}, truncate=True,
                         line_kws={'label': "$y={0:.1f}x+{1:.1f}$".format(slope, intercept)})
         g.legend()
+    plt.tight_layout()
     plt.show()
 
 
-# plot_scatter(large, 'T', ax_max=35)
-# plot_scatter(large,'rh',100) # H52 RH not good
-
-df_list = df_list()
+df_list = df_list(read_lapup=False)
 large = pd.concat(df_list, axis=1)  # concatenates dflist to large dataframe
 
 large.columns = pd.MultiIndex.from_tuples([(c[:3], c[3:]) for c in large.columns])
 temps = large.xs('T', axis=1, level=1, drop_level=True)
 rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
-# g = scatter_matrix(temps, alpha = 0.2, figsize = (16,9), diagonal = 'hist')
 
 # temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 # rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 
 temps = temps.dropna()
 ref_scatters(temps, ref='H53')
+
+# IQR = resid_t.quantile(.75)-resid_t.quantile(.25)
+
+list(temps)
