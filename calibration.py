@@ -125,8 +125,20 @@ rh = large.xs('RH', axis=1, level=1, drop_level=True)
 # rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 
 temps = temps.dropna()
-ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
+
+
+# ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
 
 # IQR = resid_t.quantile(.75)-resid_t.quantile(.25)
 
-list(temps)
+def calc_resids(df, ref="H53"):
+    resids = pd.DataFrame()
+    others = list(df)
+    others.remove(ref)
+    for j in others:
+        resids[j] = df[j] - df[ref]
+    print(list(resids))
+    print(resids.head())
+
+
+calc_resids(temps)
