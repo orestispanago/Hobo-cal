@@ -96,7 +96,7 @@ def scatter_matrix_lower():
     # plt.rcParams["axes.labelsize"] = 11
 
 
-def ref_scatters(df, ref=None):
+def ref_scatters(df, ref=None, figtitle=None):
     cols = list(df)
     cols.remove(ref)
     fig, axes = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(16, 9))
@@ -109,7 +109,7 @@ def ref_scatters(df, ref=None):
                         scatter_kws={'s': 1}, truncate=True,
                         line_kws={'label': "$y={0:.1f}x+{1:.1f}$".format(slope, intercept)})
         g.legend()
-    plt.tight_layout()
+    fig.suptitle(figtitle, fontsize=16)
     plt.show()
 
 
@@ -125,7 +125,7 @@ rh = large.xs('RH', axis=1, level=1, drop_level=True)
 # rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 
 temps = temps.dropna()
-ref_scatters(temps, ref='H53')
+ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
 
 # IQR = resid_t.quantile(.75)-resid_t.quantile(.25)
 
