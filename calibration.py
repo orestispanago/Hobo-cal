@@ -35,7 +35,7 @@ def df_list():
     dflist = []
     for fname, hname in zip(csvfiles, hobonames):
         df = pd.read_csv(fname, skiprows=1,
-                         names=['Time', hname + 'T', hname + 'rh'],
+                         names=['Time', hname + 'T', hname + 'RH'],
                          usecols=(0, 1, 2), index_col=0,
                          parse_dates=True, dayfirst=True)
         df = df[np.isfinite(df[hname + "T"])]  # dumps rows with NaNs
@@ -45,7 +45,8 @@ def df_list():
     longest = lens.index(max(lens))  # Find largest hobo dataframe
     start = dflist[longest].iloc[0].name
     end = dflist[longest].iloc[-1].name
-    df1 = pd.read_csv("Meteo_1min_2018_raw1.dat", names=['Time', 'T', 'RH'],
+    df1 = pd.read_csv("Meteo_1min_2018_raw1.dat",
+                      names=['Time', 'LapT', 'LapRH'],
                       usecols=(0, 4, 5), index_col=0,
                       parse_dates=True, dayfirst=False)
     lapup = make_ts(df1, first=start, last=end)
@@ -58,7 +59,8 @@ def plot_residuals():
     res = pd.DataFrame()
     for h in hobonames:
         res[h] = large[h + 'T'] - large['T']
-    res.plot(title='Residuals (Hobo - LapUp)', figsize=(16, 9), subplots=True, sharey=True, layout=(3, 3))
+    res.plot(title='Residuals (Hobo - LapUp)', figsize=(16, 9),
+             subplots=True, sharey=True, layout=(3, 3))
 
 
 def corrfunc(x, y):
@@ -97,7 +99,10 @@ def ref_scatters(df, ref=None):
     cols.remove(ref)
     fig, axes = plt.subplots(nrows=3, ncols=3, sharex=True, figsize=(16, 9))
     for i, col in enumerate(cols):
-        slope, intercept, r_value, p_value, std_err = stats.linregress(df[ref].values, df[col].values)
+        xval = df[col].values
+        yval = df[ref].values
+        slope, intercept, r_value, p_value, std_err = stats.linregress(xval,
+                                                                       yval)
         g = sns.regplot(x=df[col], y=ref, data=df, ax=axes[i // 3][i % 3],
                         scatter_kws={'s': 1}, truncate=True,
                         line_kws={'label': "$y={0:.1f}x+{1:.1f}$".format(slope, intercept)})
@@ -110,8 +115,6 @@ def ref_scatters(df, ref=None):
 
 df_list = df_list()
 large = pd.concat(df_list, axis=1)  # concatenates dflist to large dataframe
-large.rename(columns={'T': 'LapT'}, inplace=True)
-large.rename(columns={'RH': 'LapRH'}, inplace=True)
 
 large.columns = pd.MultiIndex.from_tuples([(c[:3], c[3:]) for c in large.columns])
 temps = large.xs('T', axis=1, level=1, drop_level=True)
