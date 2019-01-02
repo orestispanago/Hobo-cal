@@ -139,6 +139,10 @@ def calc_resids(df, ref="H53"):
         resids[j] = df[j] - df[ref]
     print(list(resids))
     print(resids.head())
+    return resids
 
 
-calc_resids(temps)
+temp_res = calc_resids(temps)
+
+temp_res.plot(title='Temperature', figsize=(16, 9), subplots=True, sharey=True,
+              layout=(2, 4))
