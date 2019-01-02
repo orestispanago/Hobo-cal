@@ -164,10 +164,10 @@ temp_res = calc_resids(temps)
 
 # plot_diurnal(temp_res, figtitle='Diurnal variation of residuals (Tref: H53)', ylab="Tref - T")
 
+# Working
 for j in list(temp_res):
     q75 = np.percentile(temp_res[j], .75)
     q25 = np.percentile(temp_res[j], .25)
-    temp_res[j + 'iqr'] = q75 - q25
-    
-resid_t_clean = resid_t[(resid_t > (resid_t.quantile(.25) - 1.5 * IQR)) & \
-                        (resid_t < (resid_t.quantile(.75) + 1.5 * IQR))]
+    iqr = q75 - q25
+    temp_res[j + 'clean'] = ((temp_res[j] > (q25 - 1.5 * iqr)) & (
+                temp_res[j] < (q75 + 1.5 * iqr)))
