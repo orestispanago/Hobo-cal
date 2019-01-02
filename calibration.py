@@ -107,29 +107,12 @@ def ref_scatters(df, ref=None, figtitle=None):
                                                                        yval)
         g = sns.regplot(x=df[col], y=ref, data=df, ax=axes[i // 4][i % 4],
                         scatter_kws={'s': 1}, truncate=True,
-                        line_kws={'label': "$y={0:.1f}x+{1:.1f}$".format(slope, intercept)})
+                        line_kws={'label': "$y={0:.1f}x+{1:.1f}$".format(slope,
+                                                                         intercept)})
         g.legend()
     fig.suptitle(figtitle, fontsize=16)
     plt.show()
 
-
-df_list = df_list(read_lapup=False)
-large = pd.concat(df_list, axis=1)  # concatenates dflist to large dataframe
-
-large.columns = pd.MultiIndex.from_tuples([(c[:3], c[3:]) for c in large.columns])
-temps = large.xs('T', axis=1, level=1, drop_level=True)
-rh = large.xs('RH', axis=1, level=1, drop_level=True)
-
-
-# temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
-# rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
-
-temps = temps.dropna()
-
-
-# ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
-
-# IQR = resid_t.quantile(.75)-resid_t.quantile(.25)
 
 def calc_resids(df, ref="H53"):
     resids = pd.DataFrame()
@@ -137,12 +120,54 @@ def calc_resids(df, ref="H53"):
     others.remove(ref)
     for j in others:
         resids[j] = df[j] - df[ref]
-    print(list(resids))
-    print(resids.head())
     return resids
 
 
+def plot_diurnal(df, figtitle=None, ylab=None):
+    hour = pd.to_timedelta(df.index.hour, unit='H')
+    hour.name = 'Hour'
+    dfout = df.groupby(hour).mean()
+    ax = dfout.plot(title=figtitle, figsize=(16, 9), subplots=True,
+                    sharey=True,
+                    layout=(2, 4))
+    ax[0][0].set_ylabel(ylab)
+    ax[1][0].set_ylabel(ylab)
+
+
+
+
+df_list = df_list(read_lapup=False)
+large = pd.concat(df_list, axis=1)  # concatenates dflist to large dataframe
+
+large.columns = pd.MultiIndex.from_tuples([(c[:3], c[3:]) for c in large.columns])
+large = large.dropna()
+temps = large.xs('T', axis=1, level=1, drop_level=True)
+rh = large.xs('RH', axis=1, level=1, drop_level=True)
+
 temp_res = calc_resids(temps)
 
-temp_res.plot(title='Temperature', figsize=(16, 9), subplots=True, sharey=True,
-              layout=(2, 4))
+# temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
+# rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
+
+# ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
+
+
+# # Linear regression for all hobos, ref = H53
+# for k in list(temp_res):
+#     slope, intercept, r_value, p_value, std_err = \
+#     stats.linregress(temps[k], temps['H53'])
+#     print(slope, intercept, r_value, p_value, std_err)
+
+
+# temp_res.plot(title='Temperature', figsize=(16, 9), subplots=True, sharey=True,
+#               layout=(2, 4))
+
+# plot_diurnal(temp_res, figtitle='Diurnal variation of residuals (Tref: H53)', ylab="Tref - T")
+
+for j in list(temp_res):
+    q75 = np.percentile(temp_res[j], .75)
+    q25 = np.percentile(temp_res[j], .25)
+    temp_res[j + 'iqr'] = q75 - q25
+    
+resid_t_clean = resid_t[(resid_t > (resid_t.quantile(.25) - 1.5 * IQR)) & \
+                        (resid_t < (resid_t.quantile(.75) + 1.5 * IQR))]
