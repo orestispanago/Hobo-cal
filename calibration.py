@@ -144,7 +144,14 @@ large = large.dropna()
 temps = large.xs('T', axis=1, level=1, drop_level=True)
 rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
-temp_res = calc_resids(temps)
+# temp_res = calc_resids(temps)
+
+
+others = list(temps)
+others.remove('H53')
+for j in others:
+    temps[j + 'res'] = temps[j] - temps['H53']
+
 
 # temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 # rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
@@ -165,9 +172,22 @@ temp_res = calc_resids(temps)
 # plot_diurnal(temp_res, figtitle='Diurnal variation of residuals (Tref: H53)', ylab="Tref - T")
 
 # Working
-for j in list(temp_res):
-    q75 = np.percentile(temp_res[j], .75)
-    q25 = np.percentile(temp_res[j], .25)
+for j in others:
+    q75 = np.percentile(temps[j + 'res'], 75)
+    q25 = np.percentile(temps[j + 'res'], 25)
     iqr = q75 - q25
-    temp_res[j + 'clean'] = ((temp_res[j] > (q25 - 1.5 * iqr)) & (
-                temp_res[j] < (q75 + 1.5 * iqr)))
+    temps[j + 'clean'] = ((temps[j + 'res'] > (q25 - 1.5 * iqr)) & (
+            temps[j + 'res'] < (q75 + 1.5 * iqr)))
+
+sns.set(color_codes=True)
+for h in others:
+    g = sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
+                   data=temps,
+                   scatter_kws={'alpha': 0.3})
+    plt.show()
+
+for h in others:
+    print(h, len(temps[temps[h + 'clean'] == False]) / len(temps))
+
+# TODO compare with Thompson test
+# TODO make regplots for IQR and Thompson clean
