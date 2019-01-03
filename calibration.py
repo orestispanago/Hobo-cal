@@ -216,8 +216,8 @@ def clean_thompson(df):
     return clean
 
 
-# clean_thom = clean_thompson(temps)
-# clean_thom = clean_thom.dropna()
+clean_thom = clean_thompson(temps)
+clean_thom = clean_thom.dropna()
 # ref_scatters(clean_thom,ref='H53',figtitle="Air temperature (°C)")
 
 def clean_iqr(df):
@@ -235,4 +235,26 @@ def clean_iqr(df):
 
 clean_i = clean_iqr(temps)
 clean_i = clean_i.dropna()
-ref_scatters(clean_i, ref='H53', figtitle="Air temperature (°C)")
+# ref_scatters(clean_i, ref='H53', figtitle="Air temperature (°C)")
+
+
+idx = pd.MultiIndex.from_product([others,
+                                  ['raw', 'IQR', 'thom']],
+                                 names=['sensor', 'data'])
+col = ['slope', 'intercept', 'r_value', 'p_value', 'std_err']
+
+reg_df = pd.DataFrame('-', idx, col)
+print(reg_df)
+
+
+def regdf(df, rowname=None):
+    for j in others:
+        x = df[j].values
+        y = df['H53'].values
+        reg_df.loc[j, rowname] = stats.linregress(x, y)
+        print(len(df[j]) / len(temps[j]))
+
+
+regdf(temps, rowname='raw')
+regdf(clean_i, rowname='IQR')
+regdf(clean_thom, rowname='thom')
