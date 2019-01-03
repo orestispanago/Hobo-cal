@@ -149,8 +149,8 @@ rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
 others = list(temps)
 others.remove('H53')
-for j in others:
-    temps[j + 'res'] = temps[j] - temps['H53']
+# for j in others:
+#     temps[j + 'res'] = temps[j] - temps['H53']
 
 tempst = temps.copy()
 # temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
@@ -189,21 +189,50 @@ sns.set(color_codes=True)
 # for h in others:
 #     print(h, len(temps[temps[h + 'clean'] == False]) / len(temps))
 
-# TODO compare with Thompson test
-# TODO make regplots for IQR and Thompson clean
+# TODO calculate linear regression before and after cleaning
 
 import thompson as t
 
-for k in others:
-    thompson_t = t.mtt(tempst[k + 'res'].tolist())
-    tempst[k + 'clean'] = tempst[k + 'res'].isin(thompson_t)
 
-for h in others:
-    print(h, len(tempst[tempst[h + 'clean'] == False]) / len(tempst))
+# # Working
+# for k in others:
+#     thompson_t = t.mtt(tempst[k + 'res'].tolist())
+#     tempst[k + 'clean'] = tempst[k + 'res'].isin(thompson_t)
+# for h in others:
+#     g = sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
+#                    data=tempst,
+#                    scatter_kws={'alpha': 0.3})
+#     # plt.show()
+#     plt.savefig(h + '_thom.png')
+def clean_thompson(df):
+    serlist = [df['H53']]
+    for i in others:
+        res = df[i] - df['H53']
+        reslist = res.tolist()
+        thompson_t = t.mtt(reslist)
+        good = df[i][res.isin(thompson_t)]
+        serlist.append(good)
+    clean = pd.concat(serlist, axis=1)
+    return clean
 
-for h in others:
-    g = sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
-                   data=tempst,
-                   scatter_kws={'alpha': 0.3})
-    # plt.show()
-    plt.savefig(h + '_thom.png')
+
+# clean_thom = clean_thompson(temps)
+# clean_thom = clean_thom.dropna()
+# ref_scatters(clean_thom,ref='H53',figtitle="Air temperature (°C)")
+
+def clean_iqr(df):
+    serlist = [df['H53']]
+    for i in others:
+        res = df[i] - df['H53']
+        q75 = np.percentile(res, 75)
+        q25 = np.percentile(res, 25)
+        iqr = q75 - q25
+        good = df[i][((res > (q25 - 1.5 * iqr)) & (res < (q75 + 1.5 * iqr)))]
+        serlist.append(good)
+    clean = pd.concat(serlist, axis=1)
+    return clean
+
+
+clean_i = clean_iqr(temps)
+clean_i = clean_i.dropna()
+ref_scatters(clean_i, ref='H53', figtitle="Air temperature (°C)")
