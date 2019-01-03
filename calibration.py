@@ -152,7 +152,7 @@ others.remove('H53')
 for j in others:
     temps[j + 'res'] = temps[j] - temps['H53']
 
-
+tempst = temps.copy()
 # temps.plot(title = 'Temperature',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 # rh.plot(title = 'RH',figsize=(16,9), subplots=True,sharey=True,layout=(3,4))
 
@@ -172,22 +172,38 @@ for j in others:
 # plot_diurnal(temp_res, figtitle='Diurnal variation of residuals (Tref: H53)', ylab="Tref - T")
 
 # Working
-for j in others:
-    q75 = np.percentile(temps[j + 'res'], 75)
-    q25 = np.percentile(temps[j + 'res'], 25)
-    iqr = q75 - q25
-    temps[j + 'clean'] = ((temps[j + 'res'] > (q25 - 1.5 * iqr)) & (
-            temps[j + 'res'] < (q75 + 1.5 * iqr)))
-
 sns.set(color_codes=True)
-for h in others:
-    g = sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
-                   data=temps,
-                   scatter_kws={'alpha': 0.3})
-    plt.show()
-
-for h in others:
-    print(h, len(temps[temps[h + 'clean'] == False]) / len(temps))
+# for j in others:
+#     q75 = np.percentile(temps[j + 'res'], 75)
+#     q25 = np.percentile(temps[j + 'res'], 25)
+#     iqr = q75 - q25
+#     temps[j + 'clean'] = ((temps[j + 'res'] > (q25 - 1.5 * iqr)) & (
+#             temps[j + 'res'] < (q75 + 1.5 * iqr)))
+#
+# for h in others:
+#     g = sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
+#                    data=temps,
+#                    scatter_kws={'alpha': 0.3})
+#     plt.show()
+#
+# for h in others:
+#     print(h, len(temps[temps[h + 'clean'] == False]) / len(temps))
 
 # TODO compare with Thompson test
 # TODO make regplots for IQR and Thompson clean
+
+import thompson as t
+
+for k in others:
+    thompson_t = t.mtt(tempst[k + 'res'].tolist())
+    tempst[k + 'clean'] = tempst[k + 'res'].isin(thompson_t)
+
+for h in others:
+    print(h, len(tempst[tempst[h + 'clean'] == False]) / len(tempst))
+
+for h in others:
+    g = sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
+                   data=tempst,
+                   scatter_kws={'alpha': 0.3})
+    # plt.show()
+    plt.savefig(h + '_thom.png')
