@@ -6,6 +6,17 @@ removes outliers by boxplot rule (IQR) and Thompson test
 compares outlier removal methods
 """
 # TODO write better comments
+# TODO separate folders raw+output
+# cwd = os.getcwd()
+# outdir = cwd+'/output/'
+# if not os.path.exists(outdir):
+    # os.makedirs(outdir)
+
+# csvfiles = glob.glob(cwd+'/raw/*cal.csv')
+# hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
+# ref = 'H53'
+# others = hobonames[:]
+# others.remove(ref)
 import glob
 import pandas as pd
 import numpy as np
@@ -97,11 +108,11 @@ def ref_scatters(df, ref=None, figtitle=None):
     fig.suptitle(figtitle, fontsize=16)
     plt.show()
 
-
+# TODO remove #1 and #2 ??
 def calc_resids(df, ref="H53"):
     resids = pd.DataFrame()
-    others = list(df)
-    others.remove(ref)
+    others = list(df) #1
+    others.remove(ref) #2
     for j in others:
         resids[j] = df[j] - df[ref]
     return resids
@@ -117,7 +128,7 @@ def plot_diurnal(df, figtitle=None, ylab=None):
     ax[0][0].set_ylabel(ylab)
     ax[1][0].set_ylabel(ylab)
 
-
+# TODO check if creation of new columns is necessary. It alters dataframe and I don't like it
 def calc_iqr():
     """ Finds outliers according to the boxplot rule (IQR).
     Clean data are marked as True or False in "*clean" column"""
@@ -129,7 +140,8 @@ def calc_iqr():
                 temps[i + 'res'] < (q75 + 1.5 * iqr)))
     return temps
 
-
+# TODO check if creation of new columns is necessary. It alters dataframe and I don't like it
+# TODO bring thompson function in this file ??
 def calc_thom():
     """ Finds outliers according to modified Thompson test.
     Clean data are marked as True or False in "*clean" column"""
