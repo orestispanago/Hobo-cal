@@ -175,6 +175,30 @@ def clean_iqr(df):
     return clean
 
 
+def calc_out_perc(datafr):
+    """ Calculates outliers percentage for dataframe"""
+    outlist = []
+    for i in others:
+        outs = datafr[i].isnull().sum()
+        tot = len(datafr)
+        out_perc = 100 * outs / tot
+        outlist.append(f'{out_perc:.1f}')  # 1 decimal
+    return outlist
+
+
+def out_perc2df():
+    """ Calculates outliers percentage for IQR and Thompson,
+    stores to dataframe"""
+    iqr_outlist = calc_out_perc(clean_i)
+    thom_outlist = calc_out_perc(clean_thom)
+
+    d = {'IQR outliers (%)': iqr_outlist,
+         'Thompson outliers (%)': thom_outlist}
+    out_perc_df = pd.DataFrame(data=d, index=others)
+    return out_perc_df
+
+
+
 def calc_reg():
     """ Calculates regression parameters
     before cleaning (raw)
@@ -206,7 +230,9 @@ large = large.dropna()
 temps = large.xs('T', axis=1, level=1, drop_level=True)
 rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
-# temp_res = calc_resids(temps)
+temp_res = calc_resids(temps)
+
+# temp_res.boxplot()
 # temp_res.plot(title='Temperature residuals $(H* - H53) = f(time)$',
 #               figsize=(16, 9), subplots=True, sharey=True,layout=(2, 4))
 
@@ -216,10 +242,11 @@ rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
 # ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
 
-others = list(temps)
-others.remove('H53')
-for j in others:
-    temps[j + 'res'] = temps[j] - temps['H53']
+
+# others = list(temps)
+# others.remove('H53')
+# for j in others:
+#     temps[j + 'res'] = temps[j] - temps['H53']
 
 # tempsiqr = calc_iqr()
 # lmplot_outliers(tempsiqr, filend='_iqr.png')
@@ -228,13 +255,19 @@ for j in others:
 # lmplot_outliers(tempsthom, filend='_thom.png')
 
 
-clean_i = clean_iqr(temps)
-clean_i = clean_i.dropna()
+# clean_i = clean_iqr(temps)
+# clean_thom = clean_thompson(temps)
+
+
+# out_percdf = out_perc2df()
+# out_percdf.to_excel('outlier_percentage.xlsx')
+
+# clean_i = clean_i.dropna()
 # ref_scatters(clean_i, ref='H53', figtitle="Air temperature (°C)")
 
-clean_thom = clean_thompson(temps)
-clean_thom = clean_thom.dropna()
+
+# clean_thom = clean_thom.dropna()
 # ref_scatters(clean_thom,ref='H53',figtitle="Air temperature (°C)")
 
-# reg_results = calc_reg()
+# reg_results = calc_reg() # must use df.dropna() first
 # reg_results.to_excel('regression_results.xlsx')
