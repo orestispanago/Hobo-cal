@@ -49,7 +49,11 @@ def load_dataset():
 
 # data is a list (no missing values)
 def mtt(datain, siglvl=0.95):
-    """ Modified Thompson test"""
+    """ Modified Thompson test
+    :type datain: list without missing values
+    :param siglvl significance level
+    :returns : list of non-outliers
+    """
 
     def calc_TS(data):
         S = np.std(data)
@@ -138,10 +142,14 @@ large = load_dataset()
 temps = large.xs('T', axis=1, level=1, drop_level=True)
 # rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
-
+# temps = temps.dropna()
 tempsc = clean_thompson(temps)
 tempsi = clean_iqr(temps)
 reg = calc_reg()
 
-# TODO add barplot ?
 # TODO add classes ?
+
+reg = reg.reset_index()
+
+for i in ['slope', 'intercept', 'r_value', 'std_err', 'nan_perc']:
+    fg = sns.catplot(x='sensor', y=i, hue='data', data=reg, kind='bar')
