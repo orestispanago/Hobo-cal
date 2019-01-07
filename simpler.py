@@ -171,3 +171,4 @@ reg = reg.reset_index()
 for i, j in enumerate(regparams):
     fg = sns.catplot(x='sensor', y=j, hue='data', data=reg, kind='bar')
     # fg.savefig(outdir+j+'.png')
+
