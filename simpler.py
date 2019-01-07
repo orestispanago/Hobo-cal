@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import t
 from scipy import stats
+import seaborn as sns
 
 cwd = os.getcwd()
 outdir = cwd + '/output/'
@@ -50,7 +51,7 @@ def load_dataset():
 # data is a list (no missing values)
 def mtt(datain, siglvl=0.95):
     """ Modified Thompson test
-    :type datain: list without missing values
+    :param datain: list without missing values
     :param siglvl significance level
     :returns : list of non-outliers
     """
@@ -150,6 +151,20 @@ reg = calc_reg()
 # TODO add classes ?
 
 reg = reg.reset_index()
+#
+# for i in ['slope', 'intercept', 'r_value', 'std_err', 'nan_perc']:
+#     fg = sns.catplot(x='sensor', y=i, hue='data', data=reg, kind='bar')
 
-for i in ['slope', 'intercept', 'r_value', 'std_err', 'nan_perc']:
-    fg = sns.catplot(x='sensor', y=i, hue='data', data=reg, kind='bar')
+
+import statsmodels.formula.api as sm
+from statsmodels.api import add_constant
+
+# from statsmodels import sm
+x = temps.H26.values
+y = temps.H53.values
+# include constant in ols models, which is not done by default
+X = add_constant(x)
+
+mod = sm.OLS(y, X)
+res = mod.fit()
+print(res.summary())
