@@ -6,7 +6,8 @@ import glob
 import pandas as pd
 import numpy as np
 from scipy.stats import t
-from scipy import stats
+import statsmodels.formula.api as sm
+from statsmodels.api import add_constant
 import seaborn as sns
 
 cwd = os.getcwd()
@@ -16,10 +17,10 @@ if not os.path.exists(outdir):
 
 csvfiles = glob.glob(cwd + '/raw/*cal.csv')
 hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
-ref = 'H53'
+ref = "H53"
 others = hobonames[:]
 others.remove(ref)
-
+regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'nan_perc']
 
 def make_ts(df, first=None, last=None, step='10min'):
     """Creates timeseries"""
@@ -50,10 +51,13 @@ def load_dataset():
 
 # data is a list (no missing values)
 def mtt(datain, siglvl=0.95):
-    """ Modified Thompson test
-    :param datain: list without missing values
-    :param siglvl significance level
-    :returns : list of non-outliers
+    """
+    Mofified Thompson test
+
+    :param list datain: must not have NaNs
+    :param float siglvl: significance level (0 to 1)
+    :returns: non outliers
+    :rtype: list
     """
 
     def calc_TS(data):
@@ -88,26 +92,29 @@ def mtt(datain, siglvl=0.95):
     return dataout
 
 
-def clean_thompson(df):
-    serlist = [df['H53']]
+def clean_thompson(df, ref=ref):
+    """Cleans data using Thompson test"""
+    serlist = [df[ref]]
     for i in others:
-        res = df[i] - df['H53']
-        reslist = res.tolist()
-        thompson_t = mtt(reslist)
-        good = df[i][res.isin(thompson_t)]
+        resids = df[i] - df[ref]
+        residlist = resids.tolist()
+        thompson_t = mtt(residlist)
+        good = df[i][resids.isin(thompson_t)]
         serlist.append(good)
     clean = pd.concat(serlist, axis=1)
     return clean
 
 
 def clean_iqr(df):
-    serlist = [df['H53']]
+    """ Cleans data using boxplot rule"""
+    serlist = [df[ref]]
     for i in others:
-        res = df[i] - df['H53']
-        q75 = np.percentile(res, 75)
-        q25 = np.percentile(res, 25)
-        iqr = q75 - q25
-        good = df[i][((res > (q25 - 1.5 * iqr)) & (res < (q75 + 1.5 * iqr)))]
+        resids = df[i] - df[ref]
+        q75 = np.percentile(resids, 75)
+        q25 = np.percentile(resids, 25)
+        iqr = q75 - q25  # InterQuantileRange
+        good = df[i][
+            ((resids > (q25 - 1.5 * iqr)) & (resids < (q75 + 1.5 * iqr)))]
         serlist.append(good)
     clean = pd.concat(serlist, axis=1)
     return clean
@@ -119,18 +126,27 @@ def calc_reg():
     and after (IQR and Thompson)"""
     idx = pd.MultiIndex.from_product([others, ['raw', 'IQR', 'thom']],
                                      names=['sensor', 'data'])
-    col = ['slope', 'intercept', 'r_value', 'p_value', 'std_err', 'nan_perc']
+    col = regparams
     reg_df = pd.DataFrame('-', idx, col)
 
     def regdf(df, rowname=None):
         for k in others:
-            df1 = df[['H53', k]]
+            df1 = df[[ref, k]]
             df1 = df1.dropna()
             x = df1[k].values
-            y = df1['H53'].values
+            y = df1[ref].values
             nanperc = (1 - df[k].count() / df[ref].count()) * 100
-            regstats = [s for s in stats.linregress(x, y)]
-            regstats.append(nanperc)
+
+            X = add_constant(x)  # include constant (intercept) in ols model
+            mod = sm.OLS(y, X)
+            results = mod.fit()
+            slope = results.params[1]
+            intercept = results.params[0]
+            slope_stderr = results.bse[1]
+            intercept_stderr = results.bse[0]
+            rsquared = results.rsquared
+            regstats = [slope, intercept, slope_stderr, intercept_stderr,
+                        rsquared, nanperc]
             reg_df.loc[k, rowname] = regstats
 
     regdf(temps, rowname='raw')
@@ -148,23 +164,10 @@ tempsc = clean_thompson(temps)
 tempsi = clean_iqr(temps)
 reg = calc_reg()
 
-# TODO add classes ?
+# reg.to_excel(outdir+'reg.xlsx')
 
 reg = reg.reset_index()
-#
-# for i in ['slope', 'intercept', 'r_value', 'std_err', 'nan_perc']:
-#     fg = sns.catplot(x='sensor', y=i, hue='data', data=reg, kind='bar')
 
-
-import statsmodels.formula.api as sm
-from statsmodels.api import add_constant
-
-# from statsmodels import sm
-x = temps.H26.values
-y = temps.H53.values
-# include constant in ols models, which is not done by default
-X = add_constant(x)
-
-mod = sm.OLS(y, X)
-res = mod.fit()
-print(res.summary())
+for i, j in enumerate(regparams):
+    fg = sns.catplot(x='sensor', y=j, hue='data', data=reg, kind='bar')
+    # fg.savefig(outdir+j+'.png')
