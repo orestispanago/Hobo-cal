@@ -22,6 +22,7 @@ others = hobonames[:]
 others.remove(ref)
 regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'nan_perc']
 
+
 def make_ts(df, first=None, last=None, step='10min'):
     """Creates timeseries"""
     if first is None:
@@ -49,7 +50,6 @@ def load_dataset():
     return dfout
 
 
-# data is a list (no missing values)
 def mtt(datain, siglvl=0.95):
     """
     Mofified Thompson test
