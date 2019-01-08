@@ -20,7 +20,7 @@ hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
 ref = "H53"
 others = hobonames[:]
 others.remove(ref)
-regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'nan_perc']
+regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'out_perc']
 
 
 def make_ts(df, first=None, last=None, step='10min'):
@@ -133,17 +133,15 @@ def calc_reg():
         for k in others:
             df1 = df[[ref, k]]
             df1 = df1.dropna()
-            x = df1[k].values
-            y = df1[ref].values
+            x = df1[k]
+            y = df1[ref]
             nanperc = (1 - df[k].count() / df[ref].count()) * 100
 
             X = add_constant(x)  # include constant (intercept) in ols model
             mod = sm.OLS(y, X)
             results = mod.fit()
-            slope = results.params[1]
-            intercept = results.params[0]
-            slope_stderr = results.bse[1]
-            intercept_stderr = results.bse[0]
+            intercept, slope = results.params
+            intercept_stderr, slope_stderr = results.bse
             rsquared = results.rsquared
             regstats = [slope, intercept, slope_stderr, intercept_stderr,
                         rsquared, nanperc]
