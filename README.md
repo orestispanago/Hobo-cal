@@ -1,15 +1,24 @@
-The python script "calibration.py" is used to visualize data from hobo sensors during the calibration phase.
+A comparison between sensors is performed using "calibration.py".
 
-A comparison between low-cost sensors and the LapUp weather station has been made,
-with no good results. The two instruments cannot be compared.
+Outlier removal methods: Modified Thompson test and Boxplot rule (IQR)
 
-The goal is to perform a sensor intercomparison.
+Functions included:
+
+    Calculations:
+        
+        Outliers drop or mark(True/False) for both methods
+        Linear regression parameters with standard errors (can be saved to excel)
+
+    Plotting:
+    
+        scatter mattrix - annotated with Pearson's R or linear regression equation (1 image)
+        scatter plots - all sensors with reference - annotated with linear regression equation (1 image)
+        diurnal variation plot -  (1 image)
+        linear model plots - outliers and non-outliers (multiple images)
+        categorical plot - each regression parameter for both methods (multiple images)
 
 
-input_files.zip contents:
 
-.csv  : sensors data.
+/raw/*.csv  : sensors data.
 
 The numbers in the filename are each sensor's serial number last two digits
-
-.dat  : weather station data
