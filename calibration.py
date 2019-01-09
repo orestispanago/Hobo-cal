@@ -1,35 +1,25 @@
-"""
-Reads raw data from HOBOs
-creates 10min timeseries with NaNs
-concatenates to large dataframe
-removes outliers by boxplot rule (IQR) and Thompson test
-compares outlier removal methods
-"""
-# TODO write better comments
-# TODO separate folders raw+output
-# cwd = os.getcwd()
-# outdir = cwd+'/output/'
-# if not os.path.exists(outdir):
-    # os.makedirs(outdir)
-
-# csvfiles = glob.glob(cwd+'/raw/*cal.csv')
-# hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
-# ref = 'H53'
-# others = hobonames[:]
-# others.remove(ref)
+"""Compares IQR and modified Thompson test outlier removal methods"""
+import os
 import glob
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy import stats
+import scipy.stats as stats
+import statsmodels.formula.api as sm
+from statsmodels.api import add_constant
 import seaborn as sns
-import thompson as t  # from cwd
+import matplotlib.pyplot as plt
 
-csvfiles = glob.glob('*.csv')
-csvfiles.sort()
-hobonames = [i[:3] for i in csvfiles]
+cwd = os.getcwd()
+outdir = cwd + '/output/'
+if not os.path.exists(outdir):
+    os.makedirs(outdir)
 
-sns.set(color_codes=True)
+csvfiles = glob.glob(cwd + '/raw/*cal.csv')
+hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
+ref = "H53"
+others = hobonames[:]
+others.remove(ref)
+regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'out_perc']
 
 
 def make_ts(df, first=None, last=None, step='10min'):
@@ -44,43 +34,163 @@ def make_ts(df, first=None, last=None, step='10min'):
     return df
 
 
-def df_list():
-    """ Reads hobo files,
-    creates timeseries based on largest hobo df,
-    appends dataframes to list"""
+def load_dataset():
+    """ Reads hobo files to list of multiindex dataframes, concatenates them
+    and makes timeseries"""
     dflist = []
     for fname, hname in zip(csvfiles, hobonames):
-        df = pd.read_csv(fname, skiprows=1,
-                         names=['Time', hname + 'T', hname + 'RH'],
-                         usecols=(0, 1, 2), index_col=0,
+        df = pd.read_csv(fname, usecols=(0, 1, 2), index_col=0,
                          parse_dates=True, dayfirst=True)
-        df = df[np.isfinite(df[hname + "T"])]  # dumps rows with NaNs
+        df.columns = pd.MultiIndex.from_tuples([(hname, 'T'), (hname, 'RH')])
         dflist.append(df)
-    return dflist
+    dfout = pd.concat(dflist, axis=1)
+    dfout = dfout.dropna()  # dumps rows with NaNs
+    dfout = make_ts(dfout)
+    return dfout
 
 
-def corrfunc(x, y, **kwargs):
-    """ Calculates Pearson's R and annotates axis
-    Use on seaborn scatter matrix"""
-    r, _ = stats.pearsonr(x, y)
-    r2 = r ** 2
-    ax = plt.gca()
-    ax.annotate("$r^2$ = {:.2f}".format(r2),
-                xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
+def mtt(datain, siglvl=0.95):
+    """
+    Mofified Thompson test
+
+    :param list datain: must not have NaNs
+    :param float siglvl: significance level (0 to 1)
+    :returns: non outliers
+    :rtype: list
+    """
+
+    def calc_TS(data):
+        S = np.std(data)
+        xbar = np.mean(data)
+        # Thompson tau
+        ta = stats.t.ppf((1 + siglvl) / 2, n - 2)
+        thompson_tau = ta * (n - 1) / (np.sqrt(n) * np.sqrt(n - 2 + ta ** 2))
+        # Thompson tau statistic
+        TS = thompson_tau * S
+        return TS, xbar
+
+    n = len(datain)  # Determine the number of samples in datain
+    if n < 3:
+        print("ERROR: There must be at least 3 samples in the dataset for the "
+              "Modified Thompson test")
+    elif n >= 3:
+        TS, xbar = calc_TS(datain)
+        datain.sort(reverse=True)
+        dataout = datain[:]  # copy of data
+        # Compare the values of extreme high data points to TS
+        while abs(max(dataout) - xbar) > TS:
+            dataout.pop(0)
+            # Determine the NEW value of S times tau
+            TS, xbar = calc_TS(dataout)
+        # Compare the values of extreme low data points to TS.
+        # Begin by determining the NEW value of S times tau
+        TS, xbar = calc_TS(dataout)
+        while abs(min(dataout) - xbar) > TS:
+            dataout.pop(len(dataout) - 1)
+            TS, xbar = calc_TS(dataout)
+    return dataout
 
 
-def slope_intercept(x, y, **kwargs):
-    """ Calculates slope + intercept and annotates axis
-    Use on seaborn scatter matrix"""
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-    ax = plt.gca()
-    ax.annotate("y={0:.1f}x+{1:.1f}".format(slope, intercept),
-                xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
+# Left as separate functions for possible use in other script.
+# Can be one function like mark_outliers()
+def clean_thompson(df):
+    """Cleans data using Thompson test """
+    serlist = [df[ref]]
+    for i in others:
+        resids = df[i] - df[ref]
+        thompson_t = mtt(resids.tolist())
+        good = df[i][resids.isin(thompson_t)]
+        serlist.append(good)
+    clean = pd.concat(serlist, axis=1)
+    return clean
 
 
-def scatter_matrix_lower():
+def clean_iqr(df):
+    """ Cleans data using boxplot rule (IQR)"""
+    serlist = [df[ref]]
+    for i in others:
+        resids = df[i] - df[ref]
+        q75 = np.percentile(resids, 75)
+        q25 = np.percentile(resids, 25)
+        iqr = q75 - q25  # InterQuantileRange
+        good = df[i][
+            ((resids > (q25 - 1.5 * iqr)) & (resids < (q75 + 1.5 * iqr)))]
+        serlist.append(good)
+    clean = pd.concat(serlist, axis=1)
+    return clean
+
+
+def calc_reg():
+    """ Calculates regression parameters
+    before cleaning (raw)
+    and after (IQR and Thompson)"""
+    idx = pd.MultiIndex.from_product([others, ['raw', 'IQR', 'thom']],
+                                     names=['sensor', 'data'])
+    col = regparams
+    reg_df = pd.DataFrame('-', idx, col)
+
+    def regdf(df, rowname=None):
+        for k in others:
+            df1 = df[[ref, k]]
+            df1 = df1.dropna()
+            x = df1[k]
+            y = df1[ref]
+            nanperc = (1 - df[k].count() / df[ref].count()) * 100
+
+            X = add_constant(x)  # include constant (intercept) in ols model
+            mod = sm.OLS(y, X)
+            results = mod.fit()
+            intercept, slope = results.params
+            intercept_stderr, slope_stderr = results.bse
+            rsquared = results.rsquared
+            regstats = [slope, intercept, slope_stderr, intercept_stderr,
+                        rsquared, nanperc]
+            reg_df.loc[k, rowname] = regstats
+
+    regdf(temps, rowname='raw')
+    regdf(tempsc, rowname='thom')
+    regdf(tempsi, rowname='IQR')
+    return reg_df
+
+
+def mark_outliers(df, method="Thompson"):
+    """ Marks outliers as True or False in 'clean' column. Use for lmplot"""
+    df1 = df.copy()
+    for i in others:
+        resids = df[i] - df[ref]
+        if method == "Thompson":
+            thompson_t = mtt(resids.tolist())
+            df1[i + 'clean'] = resids.isin(thompson_t)  # True - False column
+        elif method == "IQR":
+            q75 = np.percentile(resids, 75)
+            q25 = np.percentile(resids, 25)
+            iqr = q75 - q25
+            df1[i + 'clean'] = ((resids > (q25 - 1.5 * iqr)) & (
+                    resids < (q75 + 1.5 * iqr)))  # True - False column
+    return df1
+
+
+def scatter_matrix_lower(df):
     """ Plots lower triangle of scatter matrix """
-    grid = sns.PairGrid(data=temps, vars=list(temps), height=1)
+
+    def corrfunc(x, y, **kwargs):
+        """ Calculates Pearson's R and annotates axis
+        Use on seaborn scatter matrix"""
+        r, _ = stats.pearsonr(x, y)
+        r2 = r ** 2
+        ax = plt.gca()
+        ax.annotate("$r^2$ = {:.2f}".format(r2),
+                    xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
+
+    def slope_intercept(x, y, **kwargs):
+        """ Calculates slope + intercept and annotates axis
+        Use on seaborn scatter matrix"""
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+        ax = plt.gca()
+        ax.annotate("y={0:.1f}x+{1:.1f}".format(slope, intercept),
+                    xy=(.1, .9), xycoords=ax.transAxes, fontsize='x-small')
+
+    grid = sns.PairGrid(data=df, vars=list(df), height=1)
     for m, n in zip(*np.triu_indices_from(grid.axes, k=0)):
         grid.axes[m, n].set_visible(False)
     grid = grid.map_lower(plt.scatter, s=0.2)
@@ -90,12 +200,10 @@ def scatter_matrix_lower():
     # plt.rcParams["axes.labelsize"] = 11
 
 
-def ref_scatters(df, ref=None, figtitle=None):
-    cols = list(df)
-    cols.remove(ref)
+def ref_scatters(df, figtitle=None):
     # noinspection PyTypeChecker
     fig, axes = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(16, 9))
-    for i, col in enumerate(cols):
+    for i, col in enumerate(others):
         xval = df[col].values
         yval = df[ref].values
         slope, intercept, r_value, p_value, std_err = stats.linregress(xval,
@@ -108,178 +216,44 @@ def ref_scatters(df, ref=None, figtitle=None):
     fig.suptitle(figtitle, fontsize=16)
     plt.show()
 
-# TODO remove #1 and #2 ??
-def calc_resids(df, ref="H53"):
-    resids = pd.DataFrame()
-    others = list(df) #1
-    others.remove(ref) #2
-    for j in others:
-        resids[j] = df[j] - df[ref]
-    return resids
-
 
 def plot_diurnal(df, figtitle=None, ylab=None):
+    """ Groups dataframe by hour and plots its columns on subplots"""
     hour = pd.to_timedelta(df.index.hour, unit='H')
     hour.name = 'Hour'
     dfout = df.groupby(hour).mean()
     ax = dfout.plot(title=figtitle, figsize=(16, 9), subplots=True,
                     sharey=True,
-                    layout=(2, 4))
+                    layout=(3, 3))
     ax[0][0].set_ylabel(ylab)
     ax[1][0].set_ylabel(ylab)
-
-# TODO check if creation of new columns is necessary. It alters dataframe and I don't like it
-def calc_iqr():
-    """ Finds outliers according to the boxplot rule (IQR).
-    Clean data are marked as True or False in "*clean" column"""
-    for i in others:
-        q75 = np.percentile(temps[i + 'res'], 75)
-        q25 = np.percentile(temps[i + 'res'], 25)
-        iqr = q75 - q25
-        temps[i + 'clean'] = ((temps[i + 'res'] > (q25 - 1.5 * iqr)) & (
-                temps[i + 'res'] < (q75 + 1.5 * iqr)))
-    return temps
-
-# TODO check if creation of new columns is necessary. It alters dataframe and I don't like it
-# TODO bring thompson function in this file ??
-def calc_thom():
-    """ Finds outliers according to modified Thompson test.
-    Clean data are marked as True or False in "*clean" column"""
-    tempst = temps.copy()
-    for k in others:
-        thompson_t = t.mtt(tempst[k + 'res'].tolist())
-        tempst[k + 'clean'] = tempst[k + 'res'].isin(thompson_t)
-    return tempst
 
 
 def lmplot_outliers(df, filend=None):
     """ Plots  scatter with 2 lines for outliers and good data.
     lmplot cannot be combined with subplots, so multiple figures are created"""
-    for h in others:
-        sns.lmplot(x=h, y='H53', hue=h + "clean", palette=['r', 'k'],
+    for i in others:
+        sns.lmplot(x=i, y=ref, hue=i + "clean", palette=['r', 'k'],
                    data=df, scatter_kws={'alpha': 0.3})
         plt.show()
         # plt.savefig(h+ filend)
 
 
-def clean_thompson(df):
-    serlist = [df['H53']]
-    for i in others:
-        res = df[i] - df['H53']
-        reslist = res.tolist()
-        thompson_t = t.mtt(reslist)
-        good = df[i][res.isin(thompson_t)]
-        serlist.append(good)
-    clean = pd.concat(serlist, axis=1)
-    return clean
-
-
-def clean_iqr(df):
-    serlist = [df['H53']]
-    for i in others:
-        res = df[i] - df['H53']
-        q75 = np.percentile(res, 75)
-        q25 = np.percentile(res, 25)
-        iqr = q75 - q25
-        good = df[i][((res > (q25 - 1.5 * iqr)) & (res < (q75 + 1.5 * iqr)))]
-        serlist.append(good)
-    clean = pd.concat(serlist, axis=1)
-    return clean
-
-
-def calc_out_perc(datafr):
-    """ Calculates outliers percentage for dataframe"""
-    outlist = []
-    for i in others:
-        outs = datafr[i].isnull().sum()
-        tot = len(datafr)
-        out_perc = 100 * outs / tot
-        outlist.append(f'{out_perc:.1f}')  # 1 decimal
-    return outlist
-
-
-def out_perc2df():
-    """ Calculates outliers percentage for IQR and Thompson,
-    stores to dataframe"""
-    iqr_outlist = calc_out_perc(clean_i)
-    thom_outlist = calc_out_perc(clean_thom)
-
-    d = {'IQR outliers (%)': iqr_outlist,
-         'Thompson outliers (%)': thom_outlist}
-    out_perc_df = pd.DataFrame(data=d, index=others)
-    return out_perc_df
-
-
-
-def calc_reg():
-    """ Calculates regression parameters
-    before cleaning (raw)
-    and after (IQR and Thompson)"""
-    idx = pd.MultiIndex.from_product([others, ['raw', 'IQR', 'thom']],
-                                     names=['sensor', 'data'])
-    col = ['slope', 'intercept', 'r_value', 'p_value', 'std_err']
-    reg_df = pd.DataFrame('-', idx, col)
-
-    def regdf(df, rowname=None):
-        for k in others:
-            x = df[k].values
-            y = df['H53'].values
-            reg_df.loc[k, rowname] = stats.linregress(x, y)
-
-    regdf(temps, rowname='raw')
-    regdf(clean_i, rowname='IQR')
-    regdf(clean_thom, rowname='thom')
-    return reg_df
-
-
-df_list = df_list()
-large = pd.concat(df_list, axis=1)  # concatenates df_list to large dataframe
-large = make_ts(large)
-large.columns = pd.MultiIndex.from_tuples(
-    [(c[:3], c[3:]) for c in large.columns])
-large = large.dropna()
-
+large = load_dataset()
 temps = large.xs('T', axis=1, level=1, drop_level=True)
-rh = large.xs('RH', axis=1, level=1, drop_level=True)
+# rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
-temp_res = calc_resids(temps)
+# temps = temps.dropna()
+tempsc = clean_thompson(temps)
+tempsi = clean_iqr(temps)
+reg = calc_reg()
 
-# temp_res.boxplot()
-# temp_res.plot(title='Temperature residuals $(H* - H53) = f(time)$',
-#               figsize=(16, 9), subplots=True, sharey=True,layout=(2, 4))
+# reg.to_excel(outdir+'reg.xlsx')
 
-# plot_diurnal(temp_res, ylab="$T - T_{ref}$",
-#              figtitle='Diurnal variation of residuals ($T_{ref}$: H53)')
+reg = reg.reset_index()
 
+# for i, j in enumerate(regparams):
+#     fg = sns.catplot(x='sensor', y=j, hue='data', data=reg, kind='bar')
+#     # fg.savefig(outdir+j+'.png')
 
-# ref_scatters(temps, ref='H53', figtitle='Air Temperature (°C)')
-
-
-# others = list(temps)
-# others.remove('H53')
-# for j in others:
-#     temps[j + 'res'] = temps[j] - temps['H53']
-
-# tempsiqr = calc_iqr()
-# lmplot_outliers(tempsiqr, filend='_iqr.png')
-#
-# tempsthom = calc_thom()
-# lmplot_outliers(tempsthom, filend='_thom.png')
-
-
-# clean_i = clean_iqr(temps)
-# clean_thom = clean_thompson(temps)
-
-
-# out_percdf = out_perc2df()
-# out_percdf.to_excel('outlier_percentage.xlsx')
-
-# clean_i = clean_i.dropna()
-# ref_scatters(clean_i, ref='H53', figtitle="Air temperature (°C)")
-
-
-# clean_thom = clean_thom.dropna()
-# ref_scatters(clean_thom,ref='H53',figtitle="Air temperature (°C)")
-
-# reg_results = calc_reg() # must use df.dropna() first
-# reg_results.to_excel('regression_results.xlsx')
+lmplot_outliers(mark_outliers(temps))
