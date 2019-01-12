@@ -22,18 +22,6 @@ others.remove(ref)
 regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'out_perc']
 
 
-def make_ts(df, first=None, last=None, step='10min'):
-    """Creates timeseries"""
-    if first is None:
-        if last is None:
-            first = df.iloc[0].name
-            last = df.iloc[-1].name
-    df = df[~df.index.duplicated(keep='first')]  # dumps index duplicate values
-    dr = pd.date_range(first, last, freq=step, name='Date-time, UTC')
-    df = df.reindex(dr)  # creates step index
-    return df
-
-
 def load_dataset():
     """ Reads hobo files to list of multiindex dataframes, concatenates them
     and makes timeseries"""
@@ -45,7 +33,7 @@ def load_dataset():
         dflist.append(df)
     dfout = pd.concat(dflist, axis=1)
     dfout = dfout.dropna()  # dumps rows with NaNs
-    dfout = make_ts(dfout)
+    dfout = dfout.asfreq('10min')
     return dfout
 
 
@@ -239,6 +227,9 @@ def lmplot_outliers(df, filend=None):
         # plt.savefig(h+ filend)
 
 
+import time
+
+start = time.time()
 large = load_dataset()
 temps = large.xs('T', axis=1, level=1, drop_level=True)
 # rh = large.xs('RH', axis=1, level=1, drop_level=True)
@@ -257,3 +248,4 @@ reg = reg.reset_index()
 #     # fg.savefig(outdir+j+'.png')
 
 lmplot_outliers(mark_outliers(temps))
+print(time.time() - start)
