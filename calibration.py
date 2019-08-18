@@ -1,6 +1,7 @@
 """Compares IQR and modified Thompson test outlier removal methods"""
 import os
 import glob
+import time
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
@@ -9,18 +10,11 @@ from statsmodels.api import add_constant
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-cwd = os.getcwd()
-outdir = cwd + '/output/'
-if not os.path.exists(outdir):
-    os.makedirs(outdir)
 
-csvfiles = glob.glob(cwd + '/raw/*cal.csv')
-hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
-ref = "H53"
-others = hobonames[:]
-others.remove(ref)
-regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'out_perc']
-
+def make_dir(dirname):
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    return f"{os.getcwd()}/{dirname}/"
 
 def load_dataset():
     """ Reads hobo files to list of multiindex dataframes, concatenates them
@@ -158,7 +152,7 @@ def mark_outliers(df, method="Thompson"):
     return df1
 
 
-def scatter_matrix_lower(df):
+def scatter_matrix_lower(df, folder=None, filename=None):
     """ Plots lower triangle of scatter matrix """
 
     def corrfunc(x, y, **kwargs):
@@ -186,14 +180,17 @@ def scatter_matrix_lower(df):
     grid.set(alpha=1)
     grid.fig.suptitle('Air Temperature (°C)')
     # plt.rcParams["axes.labelsize"] = 11
+    if folder and filename:
+        grid.savefig(f"{make_dir(folder)}{filename}")
 
 
-def ref_scatters(df, figtitle=None):
+def ref_scatters(df, figtitle=None, folder=None, filename=None):
     # noinspection PyTypeChecker
     fig, axes = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(16, 9))
     for i, col in enumerate(others):
-        xval = df[col].values
-        yval = df[ref].values
+        dfeach = df[[col,ref]].dropna()
+        xval = dfeach[col].values
+        yval = dfeach[ref].values
         slope, intercept, r_value, p_value, std_err = stats.linregress(xval,
                                                                        yval)
         g = sns.regplot(x=df[col], y=ref, data=df, ax=axes[i // 4][i % 4],
@@ -203,6 +200,8 @@ def ref_scatters(df, figtitle=None):
         g.legend()
     fig.suptitle(figtitle, fontsize=16)
     plt.show()
+    if folder and filename:
+        plt.savefig(f"{make_dir(folder)}{filename}")
 
 
 def plot_diurnal(df, figtitle=None, ylab=None):
@@ -217,35 +216,47 @@ def plot_diurnal(df, figtitle=None, ylab=None):
     ax[1][0].set_ylabel(ylab)
 
 
-def lmplot_outliers(df, filend=None):
+def lmplot_outliers(df, folder=None):
     """ Plots  scatter with 2 lines for outliers and good data.
     lmplot cannot be combined with subplots, so multiple figures are created"""
     for i in others:
         sns.lmplot(x=i, y=ref, hue=i + "clean", palette=['r', 'k'],
                    data=df, scatter_kws={'alpha': 0.3})
         plt.show()
-        # plt.savefig(h+ filend)
+        if folder:
+            plt.savefig(f"{make_dir(folder)}{i}.png")
 
 
-import time
+csvfiles = glob.glob('raw/*cal.csv')
+hobonames = [os.path.split(i)[1][:3] for i in csvfiles]
+ref = "H53"
+others = hobonames[:]
+others.remove(ref)
+regparams = ['slope', 'intercept', 'sl_stderr', 'int_stderr', 'r2', 'out_perc']
 
 start = time.time()
 large = load_dataset()
 temps = large.xs('T', axis=1, level=1, drop_level=True)
 # rh = large.xs('RH', axis=1, level=1, drop_level=True)
 
-# temps = temps.dropna()
+temps = temps.dropna()
 tempsc = clean_thompson(temps)
 tempsi = clean_iqr(temps)
 reg = calc_reg()
+# ref_scatters(temps, folder='scatters', filename='ref_raw.png')
+# ref_scatters(tempsc, folder='scatters', filename='ref_clean_thom.png')
+# ref_scatters(tempsi, folder='scatters', filename='ref_clean_iqr.png')
 
-# reg.to_excel(outdir+'reg.xlsx')
+# reg.to_excel(make_dir('reg')+'regresults.xlsx')
 
-reg = reg.reset_index()
-
+# reg = reg.reset_index()
 # for i, j in enumerate(regparams):
 #     fg = sns.catplot(x='sensor', y=j, hue='data', data=reg, kind='bar')
-#     # fg.savefig(outdir+j+'.png')
+#     fg.savefig(make_dir('reg')+j+'.png')
 
-lmplot_outliers(mark_outliers(temps))
+# lmplot_outliers(mark_outliers(temps, method='Thompson'), folder='outliers/Thompson')
+# lmplot_outliers(mark_outliers(temps, method='IQR'), folder='outliers/IQR')
+scatter_matrix_lower(temps, folder='scatters', filename='matrix_raw.png')
+
+
 print(time.time() - start)
