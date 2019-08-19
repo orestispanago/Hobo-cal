@@ -193,7 +193,7 @@ def ref_scatters(df, figtitle=None, folder=None, filename=None):
         yval = dfeach[ref].values
         slope, intercept, r_value, p_value, std_err = stats.linregress(xval,
                                                                        yval)
-        g = sns.regplot(x=df[col], y=ref, data=df, ax=axes[i // 4][i % 4],
+        g = sns.regplot(x=ref, y=df[col], data=df, ax=axes[i // 4][i % 4],
                         scatter_kws={'s': 1}, truncate=True,
                         line_kws={'label': "$y={0:.1f}x+{1:.1f}$".format(slope,
                                                                          intercept)})
@@ -220,7 +220,7 @@ def lmplot_outliers(df, folder=None):
     """ Plots  scatter with 2 lines for outliers and good data.
     lmplot cannot be combined with subplots, so multiple figures are created"""
     for i in others:
-        sns.lmplot(x=i, y=ref, hue=i + "clean", palette=['r', 'k'],
+        sns.lmplot(x=ref, y=i, hue=i + "clean", palette=['r', 'k'],
                    data=df, scatter_kws={'alpha': 0.3})
         plt.show()
         if folder:
@@ -256,7 +256,7 @@ reg = calc_reg()
 
 # lmplot_outliers(mark_outliers(temps, method='Thompson'), folder='outliers/Thompson')
 # lmplot_outliers(mark_outliers(temps, method='IQR'), folder='outliers/IQR')
-scatter_matrix_lower(temps, folder='scatters', filename='matrix_raw.png')
+# scatter_matrix_lower(temps, folder='scatters', filename='matrix_raw.png')
 
 
 print(time.time() - start)
